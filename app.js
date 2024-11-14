@@ -1,34 +1,54 @@
-const express = require('express');
-const mongoose = require('mongoose');
-const router = require('./routes')
+const express = require("express");
+const mongoose = require("mongoose");
+const router = require("./routes");
 
-// DB connection
-const connectDB = async () =>{
-    try {
-        await mongoose.connect("mongodb+srv://info6150user:admin@info6150fall2023.ijcaexm.mongodb.net/switfApp?retryWrites=true&w=majority", {
-          useNewUrlParser: true,
-          useUnifiedTopology: true,
-        });
-        console.log('MongoDB connected');
-      } catch (err) {
-        console.error(err.message);
-        process.exit(1);
-      }
+const app = express();
 
+// Initialize MongoDB connection
+let cachedDb = null;
+
+async function connectToDatabase() {
+  if (cachedDb) {
+    return cachedDb;
+  }
+
+  try {
+    const client = await mongoose.connect(process.env.MONGODB_URI, {
+      useNewUrlParser: true,
+      useUnifiedTopology: true,
+    });
+    cachedDb = client;
+    console.log("MongoDB connected");
+    return cachedDb;
+  } catch (err) {
+    console.error("MongoDB connection error:", err);
+    throw err;
+  }
 }
 
-connectDB();
+app.use(express.json());
 
-const app = express()
+// Middleware to ensure database connection
+app.use(async (req, res, next) => {
+  try {
+    await connectToDatabase();
+    next();
+  } catch (error) {
+    res.status(500).json({ error: "Database connection failed" });
+  }
+});
 
-app.use(express.json())
+app.get("/", (req, res) => {
+  res.json({ message: "API is running" });
+});
 
-app.get('/', (req, res) =>{
-    res.send('Api is running..');
-})
+app.use("/api", router);
 
-// Use the combined route
-app.use('/api/', router);
+// Export the app for Vercel
+module.exports = app;
 
-
-app.listen(8008, () => console.log('Server Running on Port 8008'));
+// Only listen in development
+if (process.env.NODE_ENV !== "production") {
+  const PORT = process.env.PORT || 8008;
+  app.listen(PORT, () => console.log(`Server running on port ${PORT}`));
+}
