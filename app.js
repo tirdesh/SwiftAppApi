@@ -1,9 +1,11 @@
+//app.js
 const express = require("express");
 const mongoose = require("mongoose");
 const router = require("./routes");
+const cors = require("cors");
 
 const app = express();
-
+app.use(cors());
 // Initialize MongoDB connection with retry logic
 const connectDB = async (retries = 5) => {
   while (retries) {
