@@ -4,51 +4,55 @@ const router = require("./routes");
 
 const app = express();
 
-// Initialize MongoDB connection
-let cachedDb = null;
-
-async function connectToDatabase() {
-  if (cachedDb) {
-    return cachedDb;
+// Initialize MongoDB connection with retry logic
+const connectDB = async (retries = 5) => {
+  while (retries) {
+    try {
+      await mongoose.connect(
+        process.env.MONGODB_URI ||
+          "mongodb+srv://info6150user:admin@info6150fall2023.ijcaexm.mongodb.net/switfApp?retryWrites=true&w=majority",
+        {
+          useNewUrlParser: true,
+          useUnifiedTopology: true,
+          serverSelectionTimeoutMS: 5000,
+          socketTimeoutMS: 45000,
+        }
+      );
+      console.log("MongoDB connected successfully");
+      return true;
+    } catch (err) {
+      console.error(`Connection attempt ${6 - retries} failed:`, err.message);
+      retries -= 1;
+      if (!retries) throw err;
+      await new Promise((resolve) => setTimeout(resolve, 5000));
+    }
   }
-
-  try {
-    const client = await mongoose.connect(process.env.MONGODB_URI, {
-      useNewUrlParser: true,
-      useUnifiedTopology: true,
-    });
-    cachedDb = client;
-    console.log("MongoDB connected");
-    return cachedDb;
-  } catch (err) {
-    console.error("MongoDB connection error:", err);
-    throw err;
-  }
-}
+};
 
 app.use(express.json());
 
-// Middleware to ensure database connection
-app.use(async (req, res, next) => {
-  try {
-    await connectToDatabase();
-    next();
-  } catch (error) {
-    res.status(500).json({ error: "Database connection failed" });
-  }
+// Health check endpoint
+app.get("/api/health", (req, res) => {
+  res.json({ status: "ok", message: "API is running" });
 });
 
-app.get("/", (req, res) => {
-  res.json({ message: "API is running" });
-});
-
+// API routes
 app.use("/api", router);
 
-// Export the app for Vercel
-module.exports = app;
+// Error handling middleware
+app.use((err, req, res, next) => {
+  console.error(err.stack);
+  res.status(500).json({ error: "Something went wrong!" });
+});
 
-// Only listen in development
+// For local development
 if (process.env.NODE_ENV !== "production") {
   const PORT = process.env.PORT || 8008;
   app.listen(PORT, () => console.log(`Server running on port ${PORT}`));
 }
+
+// Connect to MongoDB
+connectDB().catch(console.error);
+
+// Export for Vercel
+module.exports = app;
